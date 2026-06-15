@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flight Reliability Intelligence</title>
+  <meta name="description" content="A reliability intelligence layer over U.S. BTS on-time performance data: carrier, route, departure-window, and delay-cause risk for airline operations.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23147a82'/><path d='M6 22 L13 14 L18 18 L26 8' stroke='white' stroke-width='2.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f6f6f3;
+      --panel: #ffffff;
+      --ink: #1b2227;
+      --muted: #5d6b73;
+      --faint: #8a959c;
+      --line: #e7e6e1;
+      --line-soft: #eef1f0;
+      --teal: #147a82;
+      --teal-ink: #0e5a60;
+      --teal-soft: #e3f0f0;
+      --rust: #c2410c;
+      --amber: #b88324;
+      --slate: #94a3a8;
+      --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--teal-ink); }
+
+    /* Header */
+    header {
+      border-bottom: 1px solid var(--line);
+      background:
+        radial-gradient(1100px 200px at 12% -40%, rgba(20,122,130,.10), transparent 60%),
+        var(--panel);
+      padding: 30px clamp(18px, 4vw, 60px) 26px;
+    }
+    .brand { display: flex; align-items: center; gap: 11px; margin-bottom: 18px; }
+    .logo {
+      width: 34px; height: 34px; border-radius: 9px;
+      background: var(--teal);
+      display: grid; place-items: center;
+      box-shadow: 0 6px 16px rgba(20,122,130,.28);
+    }
+    .brand b { font-weight: 600; font-size: 14px; letter-spacing: .01em; }
+    .brand span { color: var(--faint); font-size: 13px; }
+    .eyebrow {
+      color: var(--teal-ink);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-family: var(--serif);
+      margin: 10px 0 12px;
+      font-size: clamp(30px, 4.6vw, 50px);
+      line-height: 1.04;
+      font-weight: 700;
+      letter-spacing: -.01em;
+    }
+    .lede { max-width: 760px; color: var(--muted); font-size: 16px; line-height: 1.55; }
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .tag {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      color: var(--teal-ink);
+      background: var(--teal-soft);
+      border: 1px solid #cfe3e3;
+      border-radius: 999px;
+      padding: 4px 11px;
+    }
+
+    main { padding: 26px clamp(18px, 4vw, 60px) 60px; max-width: 1320px; }
+
+    /* Toolbar */
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(170px, 240px) minmax(170px, 240px) 1fr;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 22px;
+    }
+    label {
+      display: grid; gap: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    select, input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #fff;
+      color: var(--ink);
+      min-height: 42px;
+      padding: 9px 11px;
+      font-size: 14px;
+      font-family: var(--sans);
+    }
+    select:focus, input:focus { outline: 2px solid var(--teal); outline-offset: 1px; border-color: var(--teal); }
+
+    /* KPI cards */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    .kpi, .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 1px 2px rgba(27,34,39,.04), 0 12px 26px rgba(27,34,39,.04);
+    }
+    .kpi { padding: 16px 17px; }
+    .kpi .label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+    .kpi .value {
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: clamp(24px, 2.7vw, 32px);
+      line-height: 1.05;
+      margin-top: 10px;
+      letter-spacing: -.01em;
+    }
+    .kpi .sub { margin-top: 6px; color: var(--faint); font-size: 12px; }
+
+    /* Cards / charts */
+    .grid {
+      display: grid;
+      grid-template-columns: 1.12fr .88fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .card { padding: 18px 18px 16px; min-width: 0; }
+    .card .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .card h2 {
+      font-family: var(--serif);
+      margin: 0;
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: -.005em;
+    }
+    .card .desc { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .badge {
+      flex: none;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 9px;
+    }
+    canvas { width: 100%; height: 300px; display: block; cursor: crosshair; }
+    .full { grid-column: 1 / -1; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      position: sticky; top: 0;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      text-align: left;
+      padding: 9px 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    tbody td { padding: 10px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+    tbody tr:hover { background: #fafbfb; }
+    td.numeric, th.numeric { text-align: right; font-family: var(--mono); }
+    td.airline { font-family: var(--mono); font-weight: 600; color: var(--teal-ink); }
+    .table-wrap { max-height: 470px; overflow: auto; border-radius: 10px; }
+
+    .tip {
+      position: absolute; z-index: 30; pointer-events: none;
+      background: #11181c; color: #fff;
+      padding: 8px 10px; border-radius: 8px;
+      font-size: 12px; line-height: 1.5;
+      font-family: var(--sans);
+      box-shadow: 0 10px 26px rgba(0,0,0,.3);
+      max-width: 250px;
+    }
+    .tip b { font-family: var(--mono); font-weight: 600; }
+
+    footer {
+      margin-top: 26px;
+      color: var(--faint);
+      font-size: 12.5px;
+      line-height: 1.55;
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+    }
+
+    @media (max-width: 900px) {
+      .toolbar, .grid, .kpis { grid-template-columns: 1fr; }
+      canvas { height: 260px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 32 32"><path d="M6 22 L13 14 L18 18 L26 8" stroke="white" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <b>Flight Reliability Intelligence</b>
+      <span>· Portfolio data product</span>
+    </div>
+    <div class="eyebrow">BTS On-Time Performance · Q1 2019</div>
+    <h1>A reliability command center for airline operations</h1>
+    <p class="lede">Identify reliability risk by carrier, route, departure window, and delay cause from raw Bureau of Transportation Statistics on-time performance data — and see where operators should intervene first.</p>
+    <div class="tags">
+      <span class="tag">Reliability score 0–100</span>
+      <span class="tag">Reproducible data marts</span>
+      <span class="tag">Zero-dependency dashboard</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="toolbar" aria-label="Dashboard filters">
+      <label>Airline
+        <select id="airlineFilter" autocomplete="off"></select>
+      </label>
+      <label>Minimum route volume
+        <select id="volumeFilter" autocomplete="off">
+          <option value="100">100+ flights</option>
+          <option value="250">250+ flights</option>
+          <option value="500">500+ flights</option>
+          <option value="1000">1,000+ flights</option>
+        </select>
+      </label>
+      <label>Search route or market
+        <input id="routeSearch" type="search" autocomplete="off" placeholder="Example: LGA, SFO, New York">
+      </label>
+    </section>
+
+    <section class="kpis">
+      <div class="kpi"><div class="label">Scheduled flights</div><div class="value" id="kpiFlights">—</div><div class="sub" id="kpiFlightsSub"></div></div>
+      <div class="kpi"><div class="label">Arrival delay rate</div><div class="value" id="kpiDelayRate">—</div><div class="sub">15-minute threshold</div></div>
+      <div class="kpi"><div class="label">Reliability score</div><div class="value" id="kpiScore">—</div><div class="sub">0–100 composite</div></div>
+      <div class="kpi"><div class="label">Top delay cause</div><div class="value" id="kpiCause">—</div><div class="sub" id="kpiCauseSub"></div></div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <div class="head">
+          <div>
+            <h2>Carrier Reliability</h2>
+            <p class="desc">Composite 0–100 score penalizing cancellation, diversion, and delay, on a zoomed scale so the real spread is visible.</p>
+          </div>
+          <span class="badge">lollipop</span>
+        </div>
+        <canvas id="airlineChart" width="900" height="360"></canvas>
+      </div>
+      <div class="card">
+        <div class="head">
+          <div>
+            <h2>Delay Cause Mix</h2>
+            <p class="desc">Share of explained delay minutes by operational cause.</p>
+          </div>
+          <span class="badge">share</span>
+        </div>
+        <canvas id="delayChart" width="700" height="360"></canvas>
+      </div>
+      <div class="card full">
+        <div class="head">
+          <div>
+            <h2>Departure Hour Risk</h2>
+            <p class="desc">Arrival delay rate by scheduled departure hour. Point size reflects flight volume, so low-volume overnight hours recede.</p>
+          </div>
+          <span class="badge">hourly</span>
+        </div>
+        <canvas id="hourChart" width="1200" height="340"></canvas>
+      </div>
+      <div class="card full">
+        <div class="head">
+          <div>
+            <h2>Route Opportunity Queue</h2>
+            <p class="desc">Prioritized by estimated late arrivals, so teams see where reliability work reaches the most passengers first.</p>
+          </div>
+          <span class="badge" id="routeCount">—</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Airline</th>
+                <th>Route</th>
+                <th>Market</th>
+                <th class="numeric">Flights</th>
+                <th class="numeric">Delay Rate</th>
+                <th class="numeric">Late Arrivals</th>
+                <th class="numeric">Score</th>
+              </tr>
+            </thead>
+            <tbody id="routeRows"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Built from reproducible data marts generated from raw BTS ZIP files. The portfolio build uses Q1 2019 locally; the production architecture targets 1987–2026 history through partitioned storage, tested dbt transformations, governed metrics, and dashboard-ready aggregate tables.
+    </footer>
+  </main>
+
+  <script>
+    const DATA = __PAYLOAD_JSON__;
+    const fmt = new Intl.NumberFormat("en-US");
+    const pct = v => `${(v * 100).toFixed(1)}%`;
+    const cleanReason = name => String(name).replace(/Delay$/, "").replace(/([a-z])([A-Z])/g, "$1 $2").trim();
+    const FONT = "Inter, system-ui";
+    const MONO = "'JetBrains Mono', monospace";
+    const C = { teal: "#147a82", tealInk: "#0e5a60", rust: "#c2410c", slate: "#94a3a8", grid: "#eef1f0", axis: "#9aa6ad", ink: "#1b2227" };
+
+    const airlineFilter = document.getElementById("airlineFilter");
+    const volumeFilter = document.getElementById("volumeFilter");
+    const routeSearch = document.getElementById("routeSearch");
+
+    // Shared hover tooltip for the canvas charts.
+    const tip = document.createElement("div");
+    tip.className = "tip";
+    tip.style.display = "none";
+    document.body.appendChild(tip);
+
+    function showTip(html, evt) {
+      tip.innerHTML = html;
+      tip.style.display = "block";
+      tip.style.left = `${evt.pageX + 14}px`;
+      tip.style.top = `${evt.pageY + 14}px`;
+    }
+    function hideTip() { tip.style.display = "none"; }
+
+    // Attach hit-testing so each chart can show a tooltip for the region under the cursor.
+    function bindHits(canvas) {
+      canvas.onmousemove = evt => {
+        const rect = canvas.getBoundingClientRect();
+        const x = (evt.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (evt.clientY - rect.top) * (canvas.height / rect.height);
+        const hit = (canvas._hits || []).find(h => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h);
+        if (hit) showTip(hit.html, evt);
+        else hideTip();
+      };
+      canvas.onmouseleave = hideTip;
+    }
+
+    function populateFilters() {
+      const options = ["All", ...DATA.airlines.map(row => row.Reporting_Airline).sort()];
+      airlineFilter.innerHTML = options.map(v => `<option value="${v}">${v}</option>`).join("");
+    }
+
+    // Lollipop on a zoomed domain — the right choice when values are tightly clustered
+    // (carrier scores all sit in 90–96), where bars-from-zero would look identical.
+    // Rows are expected best-first; the top and bottom rows are highlighted.
+    function drawLollipop(canvasId, rows, labelKey, valueKey, options = {}) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      const pad = { top: 16, right: 52, bottom: 30, left: options.left || 80 };
+      const values = rows.map(row => Number(row[valueKey]));
+      const lo = Math.max(0, Math.floor(Math.min(...values)) - 2);
+      const hi = Math.min(100, Math.ceil(Math.max(...values)) + 1);
+      const plotW = W - pad.left - pad.right;
+      const xFor = v => pad.left + plotW * (v - lo) / (hi - lo || 1);
+      const step = (H - pad.top - pad.bottom) / rows.length;
+      const hits = [];
+
+      ctx.textBaseline = "middle";
+      for (let i = 0; i <= 4; i += 1) {
+        const v = lo + (hi - lo) * i / 4;
+        const gx = xFor(v);
+        ctx.strokeStyle = C.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(gx, pad.top);
+        ctx.lineTo(gx, H - pad.bottom);
+        ctx.stroke();
+        ctx.fillStyle = C.axis;
+        ctx.font = `11px ${MONO}`;
+        ctx.textAlign = "center";
+        ctx.fillText(v.toFixed(0), gx, H - pad.bottom + 14);
+      }
+
+      rows.forEach((row, index) => {
+        const value = Number(row[valueKey]);
+        const cy = pad.top + step * index + step / 2;
+        const cx = xFor(value);
+        const isBest = index === 0;
+        const isWorst = index === rows.length - 1;
+        const color = isBest ? C.teal : isWorst ? C.rust : C.slate;
+        ctx.strokeStyle = "#d7dcdd";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, cy);
+        ctx.lineTo(cx, cy);
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(cx, cy, isBest || isWorst ? 7 : 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = C.ink;
+        ctx.textAlign = "right";
+        ctx.font = `${isBest || isWorst ? "600 " : ""}12px ${MONO}`;
+        ctx.fillText(String(row[labelKey]).slice(0, 14), pad.left - 8, cy);
+        ctx.fillStyle = color;
+        ctx.textAlign = "left";
+        ctx.fillText(value.toFixed(1), cx + 11, cy);
+        hits.push({
+          x: 0, y: cy - step / 2, w: W, h: step,
+          html: `<b>${row[labelKey]}</b><br>Reliability ${value.toFixed(1)}<br>${fmt.format(row.flights)} flights`,
+        });
+      });
+      canvas._hits = hits;
+      bindHits(canvas);
+    }
+
+    // Bars from zero — honest here because delay-cause shares are not clustered.
+    function drawBars(canvasId, rows, labelKey, valueKey, color, options = {}) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      const pad = { top: 14, right: 52, bottom: 16, left: options.left || 110 };
+      const labels = rows.map(row => (options.cleanLabel ? options.cleanLabel(row[labelKey]) : String(row[labelKey])));
+      const values = rows.map(row => Number(row[valueKey]));
+      const max = Math.max(...values, 0.0001);
+      const gap = 12;
+      const barHeight = Math.max(10, (H - pad.top - pad.bottom - gap * (rows.length - 1)) / rows.length);
+      const plotW = W - pad.left - pad.right;
+      const hits = [];
+
+      ctx.textBaseline = "middle";
+      rows.forEach((row, index) => {
+        const value = values[index];
+        const y = pad.top + index * (barHeight + gap);
+        const barWidth = plotW * value / max;
+        ctx.fillStyle = C.ink;
+        ctx.textAlign = "left";
+        ctx.font = `12px ${FONT}`;
+        ctx.fillText(labels[index].slice(0, 16), 8, y + barHeight / 2);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        if (ctx.roundRect) { ctx.roundRect(pad.left, y, Math.max(barWidth, 2), barHeight, 4); ctx.fill(); }
+        else ctx.fillRect(pad.left, y, barWidth, barHeight);
+        ctx.fillStyle = C.ink;
+        ctx.font = `12px ${MONO}`;
+        const label = options.percent ? pct(value) : value.toFixed(options.decimals ?? 1);
+        ctx.fillText(label, Math.min(W - 44, pad.left + barWidth + 8), y + barHeight / 2);
+        const minutes = row.delay_minutes != null ? `<br>${fmt.format(Math.round(row.delay_minutes))} delay minutes` : "";
+        hits.push({
+          x: 0, y, w: W, h: barHeight,
+          html: `<b>${labels[index]}</b><br>${options.percent ? pct(value) : value.toFixed(1)}${minutes}`,
+        });
+      });
+      canvas._hits = hits;
+      bindHits(canvas);
+    }
+
+    function drawLineChart(canvasId, rows) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width, H = canvas.height;
+      const pad = { top: 24, right: 28, bottom: 40, left: 56 };
+      ctx.clearRect(0, 0, W, H);
+      const rates = rows.map(row => row.arrival_delay_rate);
+      const max = Math.max(...rates), min = Math.min(...rates);
+      const maxFlights = Math.max(...rows.map(row => row.flights));
+      const xFor = hour => pad.left + (W - pad.left - pad.right) * hour / 23;
+      const yFor = value => H - pad.bottom - (H - pad.top - pad.bottom) * ((value - min) / (max - min || 1));
+
+      // Gridlines with labelled y-axis.
+      ctx.textBaseline = "middle";
+      for (let i = 0; i <= 4; i += 1) {
+        const y = pad.top + i * (H - pad.top - pad.bottom) / 4;
+        ctx.strokeStyle = C.grid;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(W - pad.right, y);
+        ctx.stroke();
+        ctx.fillStyle = C.axis;
+        ctx.font = `11px ${MONO}`;
+        ctx.textAlign = "right";
+        ctx.fillText(pct(max - (max - min) * i / 4), pad.left - 8, y);
+      }
+
+      // Soft area fill under the trend line.
+      const area = ctx.createLinearGradient(0, pad.top, 0, H - pad.bottom);
+      area.addColorStop(0, "rgba(20,122,130,.18)");
+      area.addColorStop(1, "rgba(20,122,130,.01)");
+      ctx.beginPath();
+      rows.forEach((row, index) => {
+        const x = xFor(row.dep_hour), y = yFor(row.arrival_delay_rate);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.lineTo(xFor(rows[rows.length - 1].dep_hour), H - pad.bottom);
+      ctx.lineTo(xFor(rows[0].dep_hour), H - pad.bottom);
+      ctx.closePath();
+      ctx.fillStyle = area;
+      ctx.fill();
+
+      // Trend line.
+      ctx.strokeStyle = C.teal;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      rows.forEach((row, index) => {
+        const x = xFor(row.dep_hour), y = yFor(row.arrival_delay_rate);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Points sized and faded by flight volume, so noisy overnight hours recede.
+      const hits = [];
+      rows.forEach(row => {
+        const x = xFor(row.dep_hour), y = yFor(row.arrival_delay_rate);
+        const weight = row.flights / maxFlights;
+        ctx.globalAlpha = 0.35 + 0.65 * weight;
+        ctx.fillStyle = C.teal;
+        ctx.beginPath();
+        ctx.arc(x, y, 3 + 4 * Math.sqrt(weight), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        hits.push({
+          x: x - 10, y: y - 10, w: 20, h: 20,
+          html: `<b>${String(row.dep_hour).padStart(2, "0")}:00</b><br>${pct(row.arrival_delay_rate)} delayed<br>${fmt.format(row.flights)} flights`,
+        });
+      });
+
+      // Annotate the riskiest high-volume hour.
+      const busy = rows.filter(row => row.flights >= maxFlights * 0.4);
+      const peak = busy.reduce((a, b) => (b.arrival_delay_rate > a.arrival_delay_rate ? b : a), busy[0]);
+      if (peak) {
+        const px = xFor(peak.dep_hour), py = yFor(peak.arrival_delay_rate);
+        ctx.fillStyle = C.rust;
+        ctx.beginPath();
+        ctx.arc(px, py, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = C.ink;
+        ctx.font = `600 12px ${FONT}`;
+        ctx.textAlign = "center";
+        ctx.fillText(`peak ${pct(peak.arrival_delay_rate)} @ ${String(peak.dep_hour).padStart(2, "0")}:00`, px, py - 14);
+      }
+
+      // X-axis hour labels.
+      ctx.fillStyle = C.axis;
+      ctx.font = `11px ${MONO}`;
+      ctx.textAlign = "center";
+      for (let hour = 0; hour <= 23; hour += 2) {
+        ctx.fillText(String(hour).padStart(2, "0"), xFor(hour), H - 16);
+      }
+
+      canvas._hits = hits;
+      bindHits(canvas);
+    }
+
+    function filteredRoutes() {
+      const airline = airlineFilter.value;
+      const minVolume = Number(volumeFilter.value);
+      const query = routeSearch.value.trim().toLowerCase();
+      return DATA.routes.filter(row => {
+        const airlineMatch = airline === "All" || row.Reporting_Airline === airline;
+        const volumeMatch = row.flights >= minVolume;
+        const queryMatch = !query || `${row.route} ${row.route_market}`.toLowerCase().includes(query);
+        return airlineMatch && volumeMatch && queryMatch;
+      });
+    }
+
+    function updateKpis() {
+      const selectedAirline = airlineFilter.value;
+      const source = selectedAirline === "All"
+        ? DATA.airlines
+        : DATA.airlines.filter(row => row.Reporting_Airline === selectedAirline);
+      const flights = source.reduce((sum, row) => sum + row.flights, 0);
+      const late = source.reduce((sum, row) => sum + row.flights * row.arrival_delay_rate, 0);
+      const score = source.reduce((sum, row) => sum + row.flights * row.reliability_score, 0) / Math.max(flights, 1);
+      const topCause = DATA.delayReasons[0];
+      document.getElementById("kpiFlights").textContent = fmt.format(flights);
+      document.getElementById("kpiFlightsSub").textContent = `across ${source.length} carrier${source.length === 1 ? "" : "s"}`;
+      document.getElementById("kpiDelayRate").textContent = pct(late / Math.max(flights, 1));
+      document.getElementById("kpiScore").textContent = score.toFixed(1);
+      document.getElementById("kpiCause").textContent = cleanReason(topCause.delay_reason);
+      document.getElementById("kpiCauseSub").textContent = `${pct(topCause.share_of_explained_delay)} of delay minutes`;
+    }
+
+    function updateTable(routes) {
+      const shown = routes.slice(0, 30);
+      document.getElementById("routeCount").textContent = `${shown.length} of ${fmt.format(routes.length)}`;
+      document.getElementById("routeRows").innerHTML = shown.map(row => `
+        <tr>
+          <td class="airline">${row.Reporting_Airline}</td>
+          <td>${row.route}</td>
+          <td>${row.route_market}</td>
+          <td class="numeric">${fmt.format(row.flights)}</td>
+          <td class="numeric">${pct(row.arrival_delay_rate)}</td>
+          <td class="numeric">${fmt.format(row.late_arrivals)}</td>
+          <td class="numeric">${row.reliability_score.toFixed(2)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function render() {
+      const routes = filteredRoutes();
+      updateKpis();
+      updateTable(routes);
+
+      const airline = airlineFilter.value === "All"
+        ? DATA.airlines.slice().sort((a, b) => b.reliability_score - a.reliability_score)
+        : DATA.airlines.filter(row => row.Reporting_Airline === airlineFilter.value);
+      drawLollipop("airlineChart", airline, "Reporting_Airline", "reliability_score", { left: 72 });
+      drawBars("delayChart", DATA.delayReasons, "delay_reason", "share_of_explained_delay", C.teal, { left: 110, percent: true, cleanLabel: cleanReason });
+      drawLineChart("hourChart", DATA.departureHours);
+    }
+
+    populateFilters();
+    [airlineFilter, volumeFilter, routeSearch].forEach(el => el.addEventListener("input", render));
+    render();
+  </script>
+</body>
+</html>

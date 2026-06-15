@@ -1,0 +1,9 @@
+flight_reliability_intelligence:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      path: outputs/dbt/flight_reliability.duckdb
+      threads: 4
+      extensions:
+        - parquet

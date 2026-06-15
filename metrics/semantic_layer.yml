@@ -1,0 +1,64 @@
+semantic_model:
+  name: flight_reliability
+  description: Governed metric definitions for airline operational reliability.
+  grain: one row per scheduled carrier flight
+  entities:
+    - name: flight
+      type: primary
+      expr: flight_date || '-' || airline_code || '-' || flight_number || '-' || origin_airport || '-' || dest_airport || '-' || scheduled_dep_time
+    - name: airline
+      type: foreign
+      expr: airline_code
+    - name: origin_airport
+      type: foreign
+      expr: origin_airport
+    - name: destination_airport
+      type: foreign
+      expr: dest_airport
+  dimensions:
+    - flight_date
+    - year
+    - month
+    - airline_code
+    - origin_airport
+    - dest_airport
+    - scheduled_departure_hour
+  measures:
+    scheduled_flights:
+      expr: count(*)
+    arrival_delayed_15_flights:
+      expr: sum(arrival_delayed_15)
+    departure_delayed_15_flights:
+      expr: sum(departure_delayed_15)
+    cancelled_flights:
+      expr: sum(cancelled)
+    diverted_flights:
+      expr: sum(diverted)
+    severe_arrival_delay_flights:
+      expr: sum(case when arrival_delay_minutes >= 60 then 1 else 0 end)
+    explained_delay_minutes:
+      expr: sum(carrier_delay_minutes + weather_delay_minutes + nas_delay_minutes + security_delay_minutes + late_aircraft_delay_minutes)
+metrics:
+  - name: arrival_delay_rate
+    type: ratio
+    numerator: arrival_delayed_15_flights
+    denominator: scheduled_flights
+  - name: departure_delay_rate
+    type: ratio
+    numerator: departure_delayed_15_flights
+    denominator: scheduled_flights
+  - name: cancellation_rate
+    type: ratio
+    numerator: cancelled_flights
+    denominator: scheduled_flights
+  - name: diversion_rate
+    type: ratio
+    numerator: diverted_flights
+    denominator: scheduled_flights
+  - name: severe_arrival_delay_rate
+    type: ratio
+    numerator: severe_arrival_delay_flights
+    denominator: scheduled_flights
+  - name: reliability_score
+    type: derived
+    expr: 100 - 45 * cancellation_rate - 30 * diversion_rate - 20 * arrival_delay_rate - 5 * severe_arrival_delay_rate

@@ -1,0 +1,28 @@
+version: 2
+
+sources:
+  - name: lakehouse
+    description: Curated Parquet lakehouse tables generated from raw BTS monthly ZIP files.
+    schema: main
+    tables:
+      - name: fact_flight_performance
+        description: One row per scheduled carrier flight. In DuckDB this source can be registered over the partitioned Parquet directory.
+        meta:
+          external_location: "read_parquet('outputs/lakehouse/curated/fact_flight_performance/**/*.parquet', hive_partitioning = true)"
+        columns:
+          - name: flight_date
+            tests: [not_null]
+          - name: airline_code
+            tests: [not_null]
+          - name: origin_airport
+            tests: [not_null]
+          - name: dest_airport
+            tests: [not_null]
+          - name: cancelled
+            tests:
+              - accepted_values:
+                  values: [0, 1]
+          - name: diverted
+            tests:
+              - accepted_values:
+                  values: [0, 1]

@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local secrets and profiles
+.env
+.env.*
+profiles/.user.yml
+
+# dbt artifacts and logs
+target/
+dbt_packages/
+logs/
+
+# Generated data products
+outputs/
+*.duckdb
+*.parquet
+
+# Raw BTS data lives outside the repo by default, but keep this safe if copied in.
+data/
+*.zip

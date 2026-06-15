@@ -1,0 +1,63 @@
+version: 2
+
+models:
+  - name: mart_airline_reliability
+    description: Carrier-level reliability mart used by the executive dashboard.
+    columns:
+      - name: airline_code
+        tests: [not_null, unique]
+      - name: scheduled_flights
+        tests: [not_null]
+      - name: reliability_score
+        tests:
+          - not_null
+          - accepted_range:
+              min_value: 0
+              max_value: 100
+              inclusive: true
+        meta:
+          metric_owner: operations_analytics
+  - name: mart_route_reliability
+    description: Route-level opportunity queue for operational reliability interventions.
+    columns:
+      - name: route
+        tests: [not_null]
+      - name: scheduled_flights
+        tests: [not_null]
+      - name: reliability_score
+        tests:
+          - not_null
+          - accepted_range:
+              min_value: 0
+              max_value: 100
+              inclusive: true
+  - name: mart_departure_hour_reliability
+    description: Departure-hour reliability profile for network delay propagation analysis.
+    columns:
+      - name: scheduled_departure_hour
+        tests: [not_null, unique]
+      - name: reliability_score
+        tests: [not_null]
+  - name: mart_delay_reason_mix
+    description: Explained delay minutes by delay cause.
+    columns:
+      - name: delay_reason
+        tests: [not_null, unique]
+      - name: share_of_explained_delay
+        tests: [not_null]
+
+exposures:
+  - name: flight_reliability_dashboard
+    label: Flight Reliability Intelligence Dashboard
+    type: dashboard
+    maturity: medium
+    url: ../dashboard/index.html
+    description: Operations dashboard for airline, route, departure-hour, and delay-cause reliability analysis.
+    depends_on:
+      - ref('mart_airline_reliability')
+      - ref('mart_route_reliability')
+      - ref('mart_departure_hour_reliability')
+      - ref('mart_delay_reason_mix')
+    owner:
+      name: Francys Lanza
+      email: portfolio@example.com

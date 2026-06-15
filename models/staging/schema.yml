@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: stg_flights
+    description: Typed and standardized staging model over the curated BTS flight performance fact table.
+    columns:
+      - name: flight_date
+        description: Scheduled flight date.
+        tests: [not_null]
+      - name: airline_code
+        description: Reporting carrier code.
+        tests: [not_null]
+      - name: origin_airport
+        description: Origin airport code.
+        tests: [not_null]
+      - name: dest_airport
+        description: Destination airport code.
+        tests: [not_null]
+      - name: route
+        description: Origin-destination airport pair.
+        tests: [not_null]
+      - name: scheduled_departure_hour
+        description: Scheduled departure hour derived from CRSDepTime.
+        tests:
+          - not_null
+          - accepted_range:
+              min_value: 0
+              max_value: 23
+              inclusive: true
+      - name: cancelled
+        tests:
+          - accepted_values:
+              values: [0, 1]
+      - name: diverted
+        tests:
+          - accepted_values:
+              values: [0, 1]
+      - name: arrival_delayed_15
+        tests:
+          - accepted_values:
+              values: [0, 1]
+      - name: departure_delayed_15
+        tests:
+          - accepted_values:
+              values: [0, 1]

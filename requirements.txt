@@ -1,0 +1,6 @@
+duckdb
+httpx
+matplotlib
+pyarrow
+pytest
+tqdm
