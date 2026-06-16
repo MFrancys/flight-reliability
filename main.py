@@ -4,7 +4,7 @@ Usage:
     cd <project_root>
     python main.py
 
-The YEARS / MONTHS scope in src/config.py controls which BTS files are
+The years/months scope in config.yaml controls which BTS files are
 downloaded and processed. The portfolio default is Q1 2019.
 """
 from __future__ import annotations
@@ -14,33 +14,42 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+from loguru import logger
+
 # Make src/ importable without installing the package.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
 from src import build_dashboard, build_flight_reliability, build_lakehouse, download_bts_data, run_quality_checks
-from src.config import MONTHS, YEARS
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-DATA_DIR = PROJECT_ROOT.parent / "data"
+from settings import CONFIG, DATA_DIR
 
 PipelineStep = tuple[str, Callable[[], None]]
 
 
 def run_step(name: str, step: Callable[[], None]) -> None:
-    print(f"\n=== {name} ===")
+    logger.info("=== {} ===", name)
     started_at = time.perf_counter()
     step()
     elapsed = time.perf_counter() - started_at
-    print(f"Finished {name} in {elapsed:,.1f}s")
+    logger.info("Finished {} in {:,.1f}s", name, elapsed)
 
 
 def main() -> None:
     steps: list[PipelineStep] = [
-        ("Download BTS data", lambda: download_bts_data.main(DATA_DIR, YEARS, MONTHS)),
-        ("Build lakehouse", build_lakehouse.main),
-        ("Run quality checks", run_quality_checks.main),
-        ("Build reliability marts and report", build_flight_reliability.main),
-        ("Build dashboard", build_dashboard.main),
+        (
+            "Download BTS data",
+            lambda: download_bts_data.main(DATA_DIR, CONFIG["dataset"], CONFIG["bts"]),
+        ),
+        ("Build lakehouse", lambda: build_lakehouse.main(CONFIG["dataset"], CONFIG["lakehouse"])),
+        ("Run quality checks", lambda: run_quality_checks.main(CONFIG["quality_checks"])),
+        (
+            "Build reliability marts and report",
+            lambda: build_flight_reliability.main(
+                CONFIG["dataset"],
+                CONFIG["reliability_score"]["weights"],
+                CONFIG["delay_reason_columns"],
+            ),
+        ),
+        ("Build dashboard", lambda: build_dashboard.main(CONFIG["dashboard"])),
     ]
 
     started_at = time.perf_counter()
@@ -48,7 +57,7 @@ def main() -> None:
         run_step(name, step)
 
     elapsed = time.perf_counter() - started_at
-    print(f"\nPipeline completed in {elapsed:,.1f}s")
+    logger.info("Pipeline completed in {:,.1f}s", elapsed)
 
 
 if __name__ == "__main__":

@@ -2,27 +2,17 @@ from __future__ import annotations
 
 import csv
 import json
-from pathlib import Path
 
-from utils import OUTPUT_DIR, rank_route_opportunity
+from loguru import logger
 
-PROCESSED_DIR = OUTPUT_DIR / "processed"
-DASHBOARD_DIR = Path(__file__).resolve().parents[1] / "dashboard"
-TEMPLATE_PATH = DASHBOARD_DIR / "template.html"
-PAYLOAD_TOKEN = "__PAYLOAD_JSON__"
-
-METRIC_COLUMNS = [
-    "flights",
-    "avg_arrival_delay_min",
-    "p90_arrival_delay_min",
-    "arrival_delay_rate",
-    "departure_delay_rate",
-    "cancellation_rate",
-    "diversion_rate",
-    "severe_arrival_delay_rate",
-    "avg_distance_miles",
-    "reliability_score",
-]
+from settings import (
+    CONFIG,
+    DASHBOARD_DIR,
+    DASHBOARD_OUTPUT_PATH,
+    DASHBOARD_TEMPLATE_PATH,
+    PROCESSED_DIR,
+)
+from utils import rank_route_opportunity
 
 
 def read_csv(name: str) -> list[dict[str, str]]:
@@ -61,10 +51,11 @@ def _departure_hour_series(airport_windows: list[dict]) -> list[dict]:
     ]
 
 
-def build_payload() -> dict[str, object]:
-    airline = [cast_metrics(r, METRIC_COLUMNS) for r in read_csv("airline_reliability.csv")]
-    routes = [cast_metrics(r, METRIC_COLUMNS) for r in read_csv("route_airline_reliability.csv")]
-    airport_windows = [cast_metrics(r, METRIC_COLUMNS) for r in read_csv("airport_departure_windows.csv")]
+def build_payload(dashboard_config: dict) -> dict[str, object]:
+    metric_columns = dashboard_config["metric_columns"]
+    airline = [cast_metrics(r, metric_columns) for r in read_csv("airline_reliability.csv")]
+    routes = [cast_metrics(r, metric_columns) for r in read_csv("route_airline_reliability.csv")]
+    airport_windows = [cast_metrics(r, metric_columns) for r in read_csv("airport_departure_windows.csv")]
     delay_reason = [
         cast_metrics(r, ["delay_minutes", "share_of_explained_delay"])
         for r in read_csv("delay_reason_mix.csv")
@@ -87,17 +78,17 @@ def build_payload() -> dict[str, object]:
     }
 
 
-def dashboard_html(payload: dict[str, object]) -> str:
+def dashboard_html(payload: dict[str, object], dashboard_config: dict) -> str:
     payload_json = json.dumps(payload, separators=(",", ":"))
-    return TEMPLATE_PATH.read_text(encoding="utf-8").replace(PAYLOAD_TOKEN, payload_json)
+    return DASHBOARD_TEMPLATE_PATH.read_text(encoding="utf-8").replace(dashboard_config["payload_token"], payload_json)
 
 
-def main() -> None:
+def main(dashboard_config: dict) -> None:
     DASHBOARD_DIR.mkdir(parents=True, exist_ok=True)
-    payload = build_payload()
-    (DASHBOARD_DIR / "index.html").write_text(dashboard_html(payload), encoding="utf-8")
-    print(f"Wrote dashboard to {DASHBOARD_DIR / 'index.html'}")
+    payload = build_payload(dashboard_config)
+    DASHBOARD_OUTPUT_PATH.write_text(dashboard_html(payload, dashboard_config), encoding="utf-8")
+    logger.info("Wrote dashboard to {}", DASHBOARD_OUTPUT_PATH)
 
 
 if __name__ == "__main__":
-    main()
+    main(CONFIG["dashboard"])

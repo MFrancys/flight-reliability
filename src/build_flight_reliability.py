@@ -5,31 +5,20 @@ import os
 from collections import defaultdict
 from pathlib import Path
 
-from config import (
-    MONTHS,
-    SCORE_WEIGHT_ARRIVAL_DELAY,
-    SCORE_WEIGHT_CANCELLATION,
-    SCORE_WEIGHT_DIVERSION,
-    SCORE_WEIGHT_SEVERE_DELAY,
-    YEARS,
+from loguru import logger
+
+from settings import (
+    CONFIG,
+    FIGURE_DIR,
+    OUTPUT_DIR,
+    PROCESSED_DIR,
 )
-from utils import OUTPUT_DIR, iter_month_rows, parse_float, rank_route_opportunity
+from utils import iter_month_rows, parse_float, rank_route_opportunity
 
 os.environ.setdefault("MPLCONFIGDIR", str(OUTPUT_DIR / ".matplotlib-cache"))
 
 import matplotlib.pyplot as plt  # noqa: E402
 
-
-PROCESSED_DIR = OUTPUT_DIR / "processed"
-FIGURE_DIR = OUTPUT_DIR / "figures"
-
-DELAY_REASON_COLUMNS = [
-    "CarrierDelay",
-    "WeatherDelay",
-    "NASDelay",
-    "SecurityDelay",
-    "LateAircraftDelay",
-]
 
 Row = dict[str, str | int | float]
 Stats = dict[str, int | float | list[float]]
@@ -76,7 +65,7 @@ def add_row(stats: Stats, row: dict[str, str]) -> None:
     stats["diverted"] += _binary(row.get("Diverted"))
 
 
-def stats_metrics(stats: Stats) -> Row:
+def stats_metrics(stats: Stats, score_weights: dict) -> Row:
     flights = int(stats["flights"])
     arrival_delay_rate = _rate(float(stats["arrival_late_15"]), flights)
     cancellation_rate = _rate(float(stats["cancelled"]), flights)
@@ -87,10 +76,10 @@ def stats_metrics(stats: Stats) -> Row:
         min(
             100,
             100
-            - SCORE_WEIGHT_CANCELLATION * cancellation_rate
-            - SCORE_WEIGHT_DIVERSION * diversion_rate
-            - SCORE_WEIGHT_ARRIVAL_DELAY * arrival_delay_rate
-            - SCORE_WEIGHT_SEVERE_DELAY * severe_rate,
+            - score_weights["cancellation"] * cancellation_rate
+            - score_weights["diversion"] * diversion_rate
+            - score_weights["arrival_delay"] * arrival_delay_rate
+            - score_weights["severe_delay"] * severe_rate,
         ),
     )
 
@@ -163,15 +152,18 @@ def _hourly_profile(data_marts: dict[str, list[Row]]) -> dict[int, tuple[float, 
 # Ingestion and aggregation
 # ---------------------------------------------------------------------------
 
-def iter_raw_rows() -> tuple[int, dict[str, Stats], dict[str, Stats], dict[str, Stats], dict[str, float]]:
+def iter_raw_rows(
+    dataset_config: dict,
+    delay_reason_columns: list[str],
+) -> tuple[int, dict[str, Stats], dict[str, Stats], dict[str, Stats], dict[str, float]]:
     airline_groups: dict[str, Stats] = defaultdict(new_stats)
     route_airline_groups: dict[str, Stats] = defaultdict(new_stats)
     airport_hour_groups: dict[str, Stats] = defaultdict(new_stats)
-    delay_reason_minutes = {col: 0.0 for col in DELAY_REASON_COLUMNS}
+    delay_reason_minutes = {col: 0.0 for col in delay_reason_columns}
     total_rows = 0
 
-    for year in YEARS:
-        for month in MONTHS:
+    for year in dataset_config["years"]:
+        for month in dataset_config["months"]:
             for row in iter_month_rows(year, month):
                 total_rows += 1
                 airline = row["Reporting_Airline"]
@@ -191,7 +183,7 @@ def iter_raw_rows() -> tuple[int, dict[str, Stats], dict[str, Stats], dict[str, 
                 if dep_hour is not None:
                     add_row(airport_hour_groups[f"{origin}|{dep_hour:02d}"], row)
 
-                for col in DELAY_REASON_COLUMNS:
+                for col in delay_reason_columns:
                     delay_reason_minutes[col] += parse_float(row.get(col)) or 0.0
 
     return total_rows, airline_groups, route_airline_groups, airport_hour_groups, delay_reason_minutes
@@ -200,6 +192,7 @@ def iter_raw_rows() -> tuple[int, dict[str, Stats], dict[str, Stats], dict[str, 
 def rows_from_groups(
     groups: dict[str, Stats],
     field_names: list[str],
+    score_weights: dict,
     minimum_flights: int = 0,
 ) -> list[Row]:
     rows = []
@@ -207,15 +200,22 @@ def rows_from_groups(
         if int(stats["flights"]) < minimum_flights:
             continue
         row = dict(zip(field_names, key.split("|"), strict=True))
-        row.update(stats_metrics(stats))
+        row.update(stats_metrics(stats, score_weights))
         rows.append(row)
 
     rows.sort(key=lambda r: (float(r["reliability_score"]), -int(r["flights"])))
     return rows
 
 
-def build_data_marts() -> tuple[int, dict[str, list[Row]]]:
-    total_rows, airline_groups, route_groups, airport_hour_groups, delay_minutes = iter_raw_rows()
+def build_data_marts(
+    dataset_config: dict,
+    score_weights: dict,
+    delay_reason_columns: list[str],
+) -> tuple[int, dict[str, list[Row]]]:
+    total_rows, airline_groups, route_groups, airport_hour_groups, delay_minutes = iter_raw_rows(
+        dataset_config,
+        delay_reason_columns,
+    )
     total_delay = sum(delay_minutes.values())
 
     delay_reason_rows = sorted(
@@ -232,13 +232,14 @@ def build_data_marts() -> tuple[int, dict[str, list[Row]]]:
     )
 
     data_marts = {
-        "airline_reliability": rows_from_groups(airline_groups, ["Reporting_Airline"]),
+        "airline_reliability": rows_from_groups(airline_groups, ["Reporting_Airline"], score_weights),
         "route_airline_reliability": rows_from_groups(
             route_groups,
             ["Reporting_Airline", "route", "route_market", "Origin", "Dest"],
+            score_weights,
             minimum_flights=100,
         ),
-        "airport_departure_windows": rows_from_groups(airport_hour_groups, ["Origin", "dep_hour"]),
+        "airport_departure_windows": rows_from_groups(airport_hour_groups, ["Origin", "dep_hour"], score_weights),
         "delay_reason_mix": delay_reason_rows,
     }
     return total_rows, data_marts
@@ -408,19 +409,23 @@ def write_report(total_rows: int, data_marts: dict[str, list[Row]]) -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
-def main() -> None:
+def main(
+    dataset_config: dict,
+    score_weights: dict,
+    delay_reason_columns: list[str],
+) -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     FIGURE_DIR.mkdir(parents=True, exist_ok=True)
 
-    total_rows, data_marts = build_data_marts()
+    total_rows, data_marts = build_data_marts(dataset_config, score_weights, delay_reason_columns)
     save_data_marts(data_marts)
     save_figures(data_marts)
     write_report(total_rows, data_marts)
 
-    print(f"Loaded {total_rows:,} flights")
-    print(f"Wrote outputs to {OUTPUT_DIR}")
+    logger.info("Loaded {:,} flights", total_rows)
+    logger.info("Wrote outputs to {}", OUTPUT_DIR)
 
 
 if __name__ == "__main__":
-    main()
+    main(CONFIG["dataset"], CONFIG["reliability_score"]["weights"], CONFIG["delay_reason_columns"])

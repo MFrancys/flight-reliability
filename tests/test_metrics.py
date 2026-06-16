@@ -10,12 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from build_flight_reliability import _binary, _percentile, _rate, add_row, new_stats, stats_metrics
-from config import (
-    SCORE_WEIGHT_ARRIVAL_DELAY,
-    SCORE_WEIGHT_CANCELLATION,
-    SCORE_WEIGHT_DIVERSION,
-    SCORE_WEIGHT_SEVERE_DELAY,
-)
+from settings import CONFIG
 
 
 # ---------------------------------------------------------------------------
@@ -67,7 +62,7 @@ def test_percentile_p100():
 
 # ---------------------------------------------------------------------------
 # Reliability score formula
-# Weights from config must match macros/reliability_score.sql.
+# Weights from config.yaml must match macros/reliability_score.sql.
 # ---------------------------------------------------------------------------
 
 def test_score_perfect_airline():
@@ -82,7 +77,7 @@ def test_score_perfect_airline():
             "Cancelled": "0",
             "Diverted": "0",
         })
-    metrics = stats_metrics(stats)
+    metrics = stats_metrics(stats, CONFIG["reliability_score"]["weights"])
     assert metrics["reliability_score"] == 100.0
 
 
@@ -97,9 +92,9 @@ def test_score_all_cancelled():
             "Cancelled": "1",
             "Diverted": "0",
         })
-    metrics = stats_metrics(stats)
+    metrics = stats_metrics(stats, CONFIG["reliability_score"]["weights"])
     # 100% cancellation → score = max(0, 100 - 45*1) = 55
-    expected = max(0, 100 - SCORE_WEIGHT_CANCELLATION * 1.0)
+    expected = max(0, 100 - CONFIG["reliability_score"]["weights"]["cancellation"] * 1.0)
     assert metrics["reliability_score"] == round(expected, 2)
 
 
@@ -115,16 +110,16 @@ def test_score_clamped_at_zero():
             "Cancelled": "1",
             "Diverted": "1",
         })
-    metrics = stats_metrics(stats)
+    metrics = stats_metrics(stats, CONFIG["reliability_score"]["weights"])
     assert metrics["reliability_score"] >= 0
 
 
 def test_score_weights_sum_to_100():
     """Confirm the weight contract: full penalty on every dimension hits 0, not below."""
     total_penalty = (
-        SCORE_WEIGHT_CANCELLATION
-        + SCORE_WEIGHT_DIVERSION
-        + SCORE_WEIGHT_ARRIVAL_DELAY
-        + SCORE_WEIGHT_SEVERE_DELAY
+        CONFIG["reliability_score"]["weights"]["cancellation"]
+        + CONFIG["reliability_score"]["weights"]["diversion"]
+        + CONFIG["reliability_score"]["weights"]["arrival_delay"]
+        + CONFIG["reliability_score"]["weights"]["severe_delay"]
     )
     assert total_penalty == 100

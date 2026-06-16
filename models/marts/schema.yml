@@ -12,9 +12,10 @@ models:
         tests:
           - not_null
           - accepted_range:
-              min_value: 0
-              max_value: 100
-              inclusive: true
+              arguments:
+                min_value: 0
+                max_value: 100
+                inclusive: true
         meta:
           metric_owner: operations_analytics
   - name: mart_route_reliability
@@ -28,9 +29,10 @@ models:
         tests:
           - not_null
           - accepted_range:
-              min_value: 0
-              max_value: 100
-              inclusive: true
+              arguments:
+                min_value: 0
+                max_value: 100
+                inclusive: true
   - name: mart_departure_hour_reliability
     description: Departure-hour reliability profile for network delay propagation analysis.
     columns:

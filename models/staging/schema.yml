@@ -24,22 +24,27 @@ models:
         tests:
           - not_null
           - accepted_range:
-              min_value: 0
-              max_value: 23
-              inclusive: true
+              arguments:
+                min_value: 0
+                max_value: 23
+                inclusive: true
       - name: cancelled
         tests:
           - accepted_values:
-              values: [0, 1]
+              arguments:
+                values: [0, 1]
       - name: diverted
         tests:
           - accepted_values:
-              values: [0, 1]
+              arguments:
+                values: [0, 1]
       - name: arrival_delayed_15
         tests:
           - accepted_values:
-              values: [0, 1]
+              arguments:
+                values: [0, 1]
       - name: departure_delayed_15
         tests:
           - accepted_values:
-              values: [0, 1]
+              arguments:
+                values: [0, 1]

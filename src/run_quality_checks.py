@@ -2,82 +2,19 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 from typing import Literal
 
 import duckdb
+from loguru import logger
 
-from utils import OUTPUT_DIR
+from settings import CONFIG, FACT_DIR, QUALITY_DIR
 
 os.environ.setdefault("ARROW_USER_SIMD_LEVEL", "NONE")
-
-FACT_DIR = OUTPUT_DIR / "lakehouse" / "curated" / "fact_flight_performance"
-QUALITY_DIR = OUTPUT_DIR / "quality"
 
 Status = Literal["pass", "warn", "fail"]
 CheckResult = dict[str, str | int]
 
-# Each check: (name, description, sql_predicate, warn_only)
-# The predicate selects rows that FAIL the check.
-CHECKS: list[tuple[str, str, str, bool]] = [
-    (
-        "flight_date_not_null",
-        "Every fact row should have a flight date.",
-        "flight_date is null",
-        False,
-    ),
-    (
-        "airline_code_not_null",
-        "Every fact row should have an airline code.",
-        "airline_code is null or airline_code = ''",
-        False,
-    ),
-    (
-        "origin_airport_not_null",
-        "Every fact row should have an origin airport.",
-        "origin_airport is null or origin_airport = ''",
-        False,
-    ),
-    (
-        "dest_airport_not_null",
-        "Every fact row should have a destination airport.",
-        "dest_airport is null or dest_airport = ''",
-        False,
-    ),
-    (
-        "scheduled_departure_time_valid",
-        "Scheduled departure time should be HHMM-like (0–2359).",
-        "scheduled_dep_time < 0 or scheduled_dep_time > 2359",
-        False,
-    ),
-    (
-        "distance_non_negative",
-        "Flight distance should be non-negative and within a practical bound.",
-        "distance_miles < 0 or distance_miles > 10000",
-        False,
-    ),
-    (
-        "arrival_delay_extreme_outlier_watchlist",
-        "Extreme arrival delay rows are tracked as a watchlist instead of failing the pipeline.",
-        "arrival_delay_minutes < 0 or arrival_delay_minutes > 2000",
-        True,  # warn only
-    ),
-    (
-        "binary_cancelled",
-        "Cancelled flag should be binary (0 or 1).",
-        "cancelled not in (0, 1)",
-        False,
-    ),
-    (
-        "binary_diverted",
-        "Diverted flag should be binary (0 or 1).",
-        "diverted not in (0, 1)",
-        False,
-    ),
-]
-
-
-def run_checks() -> tuple[int, list[CheckResult]]:
+def run_checks(quality_checks: list[dict]) -> tuple[int, list[CheckResult]]:
     if not FACT_DIR.exists():
         raise FileNotFoundError(f"Missing lakehouse fact table: {FACT_DIR}")
 
@@ -94,7 +31,11 @@ def run_checks() -> tuple[int, list[CheckResult]]:
     total_rows: int = con.execute("select count(*) from fact_flight_performance").fetchone()[0]
 
     results = []
-    for name, description, predicate, warn_only in CHECKS:
+    for check in quality_checks:
+        name = check["name"]
+        description = check["description"]
+        predicate = check["predicate"]
+        warn_only = bool(check["warn_only"])
         rows_failed: int = con.execute(
             f"select count(*) from fact_flight_performance where {predicate}"
         ).fetchone()[0]
@@ -150,14 +91,14 @@ def write_reports(total_rows: int, checks: list[CheckResult]) -> None:
     (QUALITY_DIR / "data_quality_report.md").write_text("\n".join(lines), encoding="utf-8")
 
 
-def main() -> None:
-    total_rows, checks = run_checks()
+def main(quality_checks: list[dict]) -> None:
+    total_rows, checks = run_checks(quality_checks)
     write_reports(total_rows, checks)
     failed = sum(c["status"] == "fail" for c in checks)
     warned = sum(c["status"] == "warn" for c in checks)
-    print(f"Evaluated {total_rows:,} rows across {len(checks)} checks")
-    print(f"Passed: {len(checks) - failed - warned}; warnings: {warned}; failed: {failed}")
+    logger.info("Evaluated {:,} rows across {} checks", total_rows, len(checks))
+    logger.info("Passed: {}; warnings: {}; failed: {}", len(checks) - failed - warned, warned, failed)
 
 
 if __name__ == "__main__":
-    main()
+    main(CONFIG["quality_checks"])

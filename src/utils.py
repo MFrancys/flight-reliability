@@ -5,9 +5,7 @@ import zipfile
 from collections.abc import Iterator
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = PROJECT_ROOT.parent / "data"
-OUTPUT_DIR = PROJECT_ROOT / "outputs"
+from settings import DATA_DIR
 
 
 def monthly_zip_name(year: int, month: int) -> str:

@@ -3,15 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import httpx
+from loguru import logger
 from tqdm import tqdm
 
+from settings import CONFIG, DATA_DIR
 from utils import monthly_zip_name
 
-_BTS_BASE = "https://transtats.bts.gov/PREZIP"
-_CHUNK_BYTES = 1 << 17  # 128 KB
 
-
-def _download(url: str, dest: Path) -> None:
+def _download(url: str, dest: Path, chunk_bytes: int) -> None:
     with httpx.stream("GET", url, follow_redirects=True, timeout=120) as response:
         response.raise_for_status()
         total = int(response.headers.get("content-length", 0)) or None
@@ -23,22 +22,22 @@ def _download(url: str, dest: Path) -> None:
             unit_divisor=1024,
             leave=False,
         ) as bar:
-            for chunk in response.iter_bytes(_CHUNK_BYTES):
+            for chunk in response.iter_bytes(chunk_bytes):
                 file.write(chunk)
                 bar.update(len(chunk))
 
 
-def download_month(year: int, month: int, data_dir: Path) -> Path:
+def download_month(year: int, month: int, data_dir: Path, bts_config: dict) -> Path:
     zip_path = data_dir / monthly_zip_name(year, month)
     if zip_path.exists():
-        print(f"Using cached {zip_path.name}")
+        logger.info("Using cached {}", zip_path.name)
         return zip_path
 
-    url = f"{_BTS_BASE}/{zip_path.name}"
-    print(f"Downloading {zip_path.name} ...")
+    url = f"{bts_config['base_url']}/{zip_path.name}"
+    logger.info("Downloading {} ...", zip_path.name)
     tmp = zip_path.with_suffix(".tmp")
     try:
-        _download(url, tmp)
+        _download(url, tmp, int(bts_config["download_chunk_bytes"]))
         tmp.rename(zip_path)
     except Exception:
         tmp.unlink(missing_ok=True)
@@ -47,14 +46,13 @@ def download_month(year: int, month: int, data_dir: Path) -> Path:
     return zip_path
 
 
-def main(data_dir: Path, years: list[int], months: list[int]) -> None:
+def main(data_dir: Path, dataset_config: dict, bts_config: dict) -> None:
     data_dir.mkdir(exist_ok=True)
-    for year in years:
-        for month in months:
-            download_month(year, month, data_dir)
-    print(f"Raw BTS files ready in {data_dir}")
+    for year in dataset_config["years"]:
+        for month in dataset_config["months"]:
+            download_month(year, month, data_dir, bts_config)
+    logger.info("Raw BTS files ready in {}", data_dir)
 
 
 if __name__ == "__main__":
-    project_root = Path(__file__).resolve().parents[1]
-    main(project_root.parent / "data", [2019], [1, 2, 3])
+    main(DATA_DIR, CONFIG["dataset"], CONFIG["bts"])

@@ -80,9 +80,10 @@ portfolio_flight_reliability/
   dbt_project.yml
   profiles/
     profiles.yml.example
+  config.yaml
   main.py
   src/
-    config.py
+    settings.py
     utils.py
     download_bts_data.py
     build_lakehouse.py
@@ -151,7 +152,7 @@ This is not a universal aviation truth. It is a product metric that can be tuned
 
 The interesting part of this project is the judgment behind it, not the line count. The decisions worth defending:
 
-- **Two implementations of the same metrics, on purpose.** A streaming Python pipeline (`src/`) and a dbt SQL layer (`models/`) both compute the reliability marts. They are not redundant: the Python path is a zero-infrastructure local fallback, the dbt path is the production direction, and running both lets them **cross-validate** — carrier reliability scores match to the cent across all 17 carriers. The shared score weights live in exactly two places (`src/config.py` and `macros/reliability_score.sql`) with a comment binding them, so drift is visible.
+- **Two implementations of the same metrics, on purpose.** A streaming Python pipeline (`src/`) and a dbt SQL layer (`models/`) both compute the reliability marts. They are not redundant: the Python path is a zero-infrastructure local fallback, the dbt path is the production direction, and running both lets them **cross-validate** — carrier reliability scores match to the cent across all 17 carriers. The shared score weights live in `config.yaml`, while the dbt score formula lives in `macros/reliability_score.sql`, so drift is visible and reviewable.
 
 - **Quality checks as declarative DuckDB SQL, not row-by-row validation.** An earlier version validated each row in Python with Pydantic. Rewriting the checks as `count(*) WHERE <predicate>` queries dropped the runtime from minutes to **0.6s on 1.75M rows**, made each rule a one-line, reviewable predicate, and pushed the work to the engine that already holds the data. Pydantic is the right tool for request validation; it is the wrong tool for scanning a columnar fact table.
 
@@ -174,7 +175,7 @@ pip install -r requirements.txt
 python3 main.py
 ```
 
-The dataset scope (years and months) is controlled in one place: `src/config.py`.
+The dataset scope (years and months) is controlled in one place: `config.yaml`.
 
 To run individual steps while debugging:
 

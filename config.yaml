@@ -1,0 +1,121 @@
+dataset:
+  years: [2020, 2021, 2022, 2023, 2024, 2025, 2026]
+  months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+bts:
+  base_url: https://transtats.bts.gov/PREZIP
+  download_chunk_bytes: 131072
+
+reliability_score:
+  weights:
+    cancellation: 45
+    diversion: 30
+    arrival_delay: 20
+    severe_delay: 5
+
+delay_reason_columns:
+  - CarrierDelay
+  - WeatherDelay
+  - NASDelay
+  - SecurityDelay
+  - LateAircraftDelay
+
+dashboard:
+  payload_token: __PAYLOAD_JSON__
+  metric_columns:
+    - flights
+    - avg_arrival_delay_min
+    - p90_arrival_delay_min
+    - arrival_delay_rate
+    - departure_delay_rate
+    - cancellation_rate
+    - diversion_rate
+    - severe_arrival_delay_rate
+    - avg_distance_miles
+    - reliability_score
+
+lakehouse:
+  chunk_size: 100000
+  raw_to_curated_columns:
+    Year: year
+    Month: month
+    FlightDate: flight_date
+    DayOfWeek: day_of_week
+    Reporting_Airline: airline_code
+    Flight_Number_Reporting_Airline: flight_number
+    Tail_Number: tail_number
+    Origin: origin_airport
+    OriginCityName: origin_city
+    Dest: dest_airport
+    DestCityName: dest_city
+    CRSDepTime: scheduled_dep_time
+    DepDelayMinutes: departure_delay_minutes
+    DepDel15: departure_delayed_15
+    ArrDelayMinutes: arrival_delay_minutes
+    ArrDel15: arrival_delayed_15
+    Cancelled: cancelled
+    CancellationCode: cancellation_code
+    Diverted: diverted
+    Distance: distance_miles
+    CarrierDelay: carrier_delay_minutes
+    WeatherDelay: weather_delay_minutes
+    NASDelay: nas_delay_minutes
+    SecurityDelay: security_delay_minutes
+    LateAircraftDelay: late_aircraft_delay_minutes
+  integer_columns:
+    - year
+    - month
+    - day_of_week
+    - flight_number
+    - scheduled_dep_time
+    - departure_delayed_15
+    - arrival_delayed_15
+    - cancelled
+    - diverted
+  float_columns:
+    - departure_delay_minutes
+    - arrival_delay_minutes
+    - distance_miles
+    - carrier_delay_minutes
+    - weather_delay_minutes
+    - nas_delay_minutes
+    - security_delay_minutes
+    - late_aircraft_delay_minutes
+
+quality_checks:
+  - name: flight_date_not_null
+    description: Every fact row should have a flight date.
+    predicate: flight_date is null
+    warn_only: false
+  - name: airline_code_not_null
+    description: Every fact row should have an airline code.
+    predicate: airline_code is null or airline_code = ''
+    warn_only: false
+  - name: origin_airport_not_null
+    description: Every fact row should have an origin airport.
+    predicate: origin_airport is null or origin_airport = ''
+    warn_only: false
+  - name: dest_airport_not_null
+    description: Every fact row should have a destination airport.
+    predicate: dest_airport is null or dest_airport = ''
+    warn_only: false
+  - name: scheduled_departure_time_valid
+    description: Scheduled departure time should be HHMM-like (0-2359).
+    predicate: scheduled_dep_time < 0 or scheduled_dep_time > 2359
+    warn_only: false
+  - name: distance_non_negative
+    description: Flight distance should be non-negative and within a practical bound.
+    predicate: distance_miles < 0 or distance_miles > 10000
+    warn_only: false
+  - name: arrival_delay_extreme_outlier_watchlist
+    description: Extreme arrival delay rows are tracked as a watchlist instead of failing the pipeline.
+    predicate: arrival_delay_minutes < 0 or arrival_delay_minutes > 2000
+    warn_only: true
+  - name: binary_cancelled
+    description: Cancelled flag should be binary (0 or 1).
+    predicate: cancelled not in (0, 1)
+    warn_only: false
+  - name: binary_diverted
+    description: Diverted flag should be binary (0 or 1).
+    predicate: diverted not in (0, 1)
+    warn_only: false
